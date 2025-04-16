@@ -1,12 +1,59 @@
-# React + Vite
+# The Aroma-2
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The Aroma-2 is a personalized recipe recommendation application powered by AI. It allows users to generate recipes based on their dietary preferences, meal types, cuisines, and more. Users can also interact with an AI chat assistant to get recipe suggestions or ask cooking-related questions.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **AI-Powered Recipe Generator**: Generate personalized recipes based on user preferences.
+- **AI Chat Assistant**: Ask questions about recipes or cooking and get instant responses.
+- **Save Recipes**: Save your favorite recipes for easy access later.
+- **MealDB Integration**: Search for real recipes using ingredients or meal types.
+- **Interactive UI**: User-friendly interface with advanced filtering options.
 
-## Expanding the ESLint configuration
+## Technologies Used
 
-If you are developing a production application, we recommend using TypeScript and enable type-aware lint rules. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **React**: Frontend framework for building the user interface.
+- **Vite**: Fast build tool for modern web projects.
+- **Tailwind CSS**: Utility-first CSS framework for styling.
+- **Supabase**: Backend as a service for authentication and database.
+- **MealDB API**: Fetch real recipes from an external API.
+- **Unsplash API**: Fetch food images for recipes.
+
+## Getting Started
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/the-aroma-2.git
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open the application in your browser at `http://localhost:3000`.
+
+## Environment Variables
+
+Create a `.env` file in the root directory and add the following variables:
+
+```env
+VITE_SUPABASE_URL=your-supabase-url
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+VITE_UNSPLASH_ACCESS_KEY=your-unsplash-access-key
+VITE_XAI_API_KEY=your-xai-api-key
+```
+
+## Repository
+
+The source code for this project is hosted on GitHub. You can find it at the following URL:
+
+[https://github.com/JithendraNara/aroma](https://github.com/JithendraNara/aroma)
+
+## License
+
