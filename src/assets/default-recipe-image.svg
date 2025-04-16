@@ -1,0 +1,30 @@
+<svg viewBox="0 0 500 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="500" height="300" fill="#f0f0f0"/>
+  
+  <!-- Plate -->
+  <circle cx="250" cy="170" r="100" fill="#ffffff" stroke="#e0e0e0" stroke-width="3"/>
+  
+  <!-- Food icons -->
+  <g transform="translate(250 160) scale(0.8)">
+    <!-- Fork -->
+    <path d="M-60,0 L-60,-50 M-60,-30 L-40,-30 M-60,-15 L-40,-15 M-60,0 L-40,0" 
+      stroke="#9CA3AF" stroke-width="6" stroke-linecap="round"/>
+    
+    <!-- Knife -->
+    <path d="M60,-50 L20,10" stroke="#9CA3AF" stroke-width="6" stroke-linecap="round"/>
+    <path d="M20,10 L40,-40" stroke="#9CA3AF" stroke-width="12" stroke-linecap="round" fill="none"/>
+    
+    <!-- Chef hat -->
+    <path d="M0,-60 C-30,-60 -30,-90 0,-90 C30,-90 30,-60 0,-60" fill="#3c9283"/>
+    <rect x="-20" y="-60" width="40" height="10" fill="#3c9283" rx="5"/>
+  </g>
+  
+  <!-- Text -->
+  <text x="250" y="220" font-family="Arial, sans-serif" font-size="20" fill="#9CA3AF" 
+    text-anchor="middle" dominant-baseline="middle">No Image Available</text>
+  
+  <!-- The Aroma logo text -->
+  <text x="250" y="250" font-family="Arial, sans-serif" font-size="16" fill="#3c9283" 
+    text-anchor="middle" dominant-baseline="middle" font-weight="bold">The Aroma</text>
+</svg>
