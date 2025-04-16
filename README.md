@@ -1,4 +1,4 @@
-# The Aroma-2
+# The Aroma
 
 The Aroma-2 is a personalized recipe recommendation application powered by AI. It allows users to generate recipes based on their dietary preferences, meal types, cuisines, and more. Users can also interact with an AI chat assistant to get recipe suggestions or ask cooking-related questions.
 
