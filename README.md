@@ -23,7 +23,7 @@ The Aroma-2 is a personalized recipe recommendation application powered by AI. I
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/the-aroma-2.git
+   git clone https://github.com/JithendraNara/aroma.git
    ```
 
 2. Install dependencies:
