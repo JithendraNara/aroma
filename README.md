@@ -36,19 +36,6 @@ The Aroma-2 is a personalized recipe recommendation application powered by AI. I
    npm run dev
    ```
 
-4. Open the application in your browser at `http://localhost:3000`.
-
-## Environment Variables
-
-Create a `.env` file in the root directory and add the following variables:
-
-```env
-VITE_SUPABASE_URL=your-supabase-url
-VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
-VITE_UNSPLASH_ACCESS_KEY=your-unsplash-access-key
-VITE_XAI_API_KEY=your-xai-api-key
-```
-
 ## Repository
 
 The source code for this project is hosted on GitHub. You can find it at the following URL:
