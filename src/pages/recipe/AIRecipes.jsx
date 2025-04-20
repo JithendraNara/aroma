@@ -47,22 +47,6 @@ function parseAIRecipe(aiText) {
   return { title, ingredients, instructions };
 }
 
-// Fetch a food image from Unsplash based on a query
-async function fetchUnsplashImage(query) {
-  try {
-    const accessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
-    if (!accessKey) return null;
-    const url = `https://api.unsplash.com/photos/random?query=${encodeURIComponent(query)}&orientation=squarish&client_id=${accessKey}`;
-    const response = await fetch(url);
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.urls?.small || data.urls?.regular || null;
-  } catch (err) {
-    console.error("Unsplash image fetch error:", err);
-    return null;
-  }
-}
-
 const AIRecipes = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -84,6 +68,38 @@ const AIRecipes = () => {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [exploreRecipe, setExploreRecipe] = useState(null);
+
+  const generateImageWithXAI = async (prompt) => {
+    try {
+      const enhancedPrompt = `Professional food photography of ${prompt}. The dish is beautifully plated on an elegant ceramic plate or rustic wooden board, captured from a 45-degree angle or overhead perspective. The lighting is soft and natural, highlighting the textures and colors of the food. The background is intentionally blurred with warm, inviting tones. Garnishes and ingredients are artfully arranged, and there's a slight steam or moisture visible if the dish is hot. The image style is clean, modern, and appetizing, suitable for a high-end restaurant menu or food magazine.`;
+      
+      const response = await axios.post(
+        "https://api.x.ai/v1/images/generations",
+        {
+          model: "grok-2-image",
+          prompt: enhancedPrompt,
+          n: 1,
+          response_format: "url"
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${import.meta.env.VITE_XAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Extract the URL and revised prompt from the response
+      const imageUrl = response.data.data[0].url;
+      const revisedPrompt = response.data.data[0].revised_prompt;
+      console.log('Generated image with revised prompt:', revisedPrompt);
+      
+      return imageUrl;
+    } catch (err) {
+      console.error("Error generating image:", err);
+      return null;
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -117,137 +133,216 @@ const AIRecipes = () => {
     });
   };
 
+  const applyFilters = (recipes) => {
+    if (!recipes || recipes.length === 0) return [];
+    
+    return recipes.filter(recipe => {
+      // Dietary Preference Filter
+      if (preferences.dietaryPreference) {
+        const dietaryTags = (recipe.strTags || "").toLowerCase();
+        const category = (recipe.strCategory || "").toLowerCase();
+        
+        switch (preferences.dietaryPreference.toLowerCase()) {
+          case "vegetarian":
+            if (["beef", "chicken", "pork", "lamb", "seafood", "fish"].some(meat => 
+              category.includes(meat) || dietaryTags.includes(meat))) {
+              return false;
+            }
+            break;
+          case "vegan":
+            if (["meat", "chicken", "beef", "pork", "fish", "egg", "milk", "cheese", "dairy"].some(item =>
+              category.includes(item) || dietaryTags.includes(item))) {
+              return false;
+            }
+            break;
+          case "gluten-free":
+            if (["wheat", "flour", "pasta", "bread"].some(item =>
+              recipe.strInstructions?.toLowerCase().includes(item))) {
+              return false;
+            }
+            break;
+          // Add other dietary preference checks as needed
+        }
+      }
+
+      // Meal Type Filter
+      if (preferences.mealType && !recipe.strCategory?.toLowerCase().includes(preferences.mealType.toLowerCase())) {
+        const mealTypeKeywords = {
+          breakfast: ["breakfast", "morning", "brunch"],
+          lunch: ["lunch", "sandwich", "salad"],
+          dinner: ["dinner", "supper", "main course"],
+          snack: ["snack", "appetizer", "side"],
+          dessert: ["dessert", "sweet", "cake", "pie"]
+        };
+        
+        const keywords = mealTypeKeywords[preferences.mealType.toLowerCase()] || [];
+        if (!keywords.some(keyword => 
+          recipe.strMeal?.toLowerCase().includes(keyword) ||
+          recipe.strTags?.toLowerCase().includes(keyword))) {
+          return false;
+        }
+      }
+
+      // Cuisine Filter
+      if (preferences.cuisine && 
+          recipe.strArea?.toLowerCase() !== preferences.cuisine.toLowerCase() &&
+          !recipe.strTags?.toLowerCase().includes(preferences.cuisine.toLowerCase())) {
+        return false;
+      }
+
+      // Cooking Time Filter
+      if (preferences.cookingTime) {
+        const timeEstimate = estimateCookingTime(recipe);
+        if (!timeEstimate.includes(preferences.cookingTime)) {
+          return false;
+        }
+      }
+
+      // Skill Level Filter
+      if (preferences.skillLevel) {
+        const difficulty = calculateDifficulty(recipe);
+        if (difficulty.toLowerCase() !== preferences.skillLevel.toLowerCase()) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  };
+
+  // Helper function to estimate cooking time
+  const estimateCookingTime = (recipe) => {
+    const instructions = recipe.strInstructions?.toLowerCase() || '';
+    const ingredientCount = Object.keys(recipe)
+      .filter(key => key.startsWith('strIngredient') && recipe[key])
+      .length;
+
+    if (instructions.includes('overnight') || instructions.includes('hours')) {
+      return 'Over 60 minutes';
+    } else if (instructions.includes('simmer') || instructions.includes('bake') || ingredientCount > 8) {
+      return '30-60 minutes';
+    } else if (instructions.includes('quick') || ingredientCount <= 5) {
+      return '15-30 minutes';
+    }
+    return '15-30 minutes';
+  };
+
+  // Helper function to calculate difficulty
+  const calculateDifficulty = (recipe) => {
+    const ingredientCount = Object.keys(recipe)
+      .filter(key => key.startsWith('strIngredient') && recipe[key])
+      .length;
+    const stepCount = recipe.strInstructions?.split(/\d+\./).length || 0;
+
+    if (ingredientCount > 10 || stepCount > 8) return 'Advanced';
+    if (ingredientCount > 6 || stepCount > 5) return 'Intermediate';
+    return 'Beginner';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setAiRecipes([]);
 
-    // Try to find real recipes first
-    let foundRecipes = [];
     try {
-      // Try searching by cuisine or meal type or dietary preference (fallback to name search)
-      if (preferences.cuisine) {
-        foundRecipes = await searchMealsByName(preferences.cuisine);
-      }
-      if ((!foundRecipes || foundRecipes.length === 0) && preferences.mealType) {
-        foundRecipes = await searchMealsByName(preferences.mealType);
-      }
-      if ((!foundRecipes || foundRecipes.length === 0) && preferences.dietaryPreference) {
-        foundRecipes = await searchMealsByName(preferences.dietaryPreference);
-      }
-      // If user specified an ingredient in additionalInfo, try ingredient search
-      if (
-        (!foundRecipes || foundRecipes.length === 0) &&
-        preferences.additionalInfo &&
-        preferences.additionalInfo.trim().length > 0
-      ) {
-        // Use first word as ingredient for demo purposes
-        const ingredient = preferences.additionalInfo.split(/,| /)[0];
-        foundRecipes = await searchMealsByIngredient(ingredient);
-        // If found, get full details for each recipe
-        if (foundRecipes && foundRecipes.length > 0 && foundRecipes[0].idMeal) {
-          foundRecipes = await Promise.all(
-            foundRecipes.slice(0, 5).map((r) => getMealById(r.idMeal))
-          );
-        }
-      }
-    } catch (err) {
-      // Ignore errors, fallback to AI
-    }
+      // First try to find real recipes
+      let foundRecipes = [];
+      
+      // Search by multiple criteria
+      const searchQueries = [
+        preferences.cuisine,
+        preferences.mealType,
+        preferences.dietaryPreference,
+        preferences.additionalInfo
+      ].filter(Boolean);
 
-    // If real recipes found, use them
-    if (foundRecipes && foundRecipes.length > 0) {
-      setAiRecipes(foundRecipes.slice(0, 5));
-      setLoading(false);
-      setToastMessage("Your personalized recipes are ready!");
-      setToastType("success");
-      setShowToast(true);
-      return;
-    }
-
-    // Otherwise, fallback to xAI for AI-generated recipe
-    try {
-      const axios = (await import("axios")).default;
-      const prompt = `Generate 3 creative recipes based on these preferences: Dietary: ${preferences.dietaryPreference}, Meal: ${preferences.mealType}, Cuisine: ${preferences.cuisine}, Cooking Time: ${preferences.cookingTime}, Skill: ${preferences.skillLevel}, Additional: ${preferences.additionalInfo}.\n\nPlease format your response strictly as follows for each recipe:\nTitle: <Recipe Title>\nIngredients:\n- <ingredient 1>\n- <ingredient 2>\n...\nInstructions:\n1. <step 1>\n2. <step 2>\n...\nSeparate each recipe with \n---\n.`;
-      const response = await axios.post(
-        "https://api.x.ai/v1/chat/completions",
-        {
-          model: "grok-3-mini",
-          messages: [
-            { role: "system", content: "You are a helpful AI chef assistant. When asked for recipes, always return a list of 3 creative recipes in the strict format described by the user prompt." },
-            { role: "user", content: prompt },
-          ],
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${import.meta.env.VITE_XAI_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const aiText = response.data.choices?.[0]?.message?.content || "Sorry, I couldn't generate a recipe.";
-      // Try to parse multiple recipes from the AI response
-      const aiRecipeBlocks = aiText.split(/\n---+\n/).map(block => block.trim()).filter(Boolean);
-      let aiRecipeList = [];
-      if (aiRecipeBlocks.length > 1) {
-        aiRecipeList = aiRecipeBlocks.map((block, idx) => {
-          const parsed = parseAIRecipe(block);
-          if (parsed.title && parsed.ingredients.length > 1 && parsed.instructions && parsed.instructions.length > 10) {
-            const aiRecipe = {
-              idMeal: `ai-${Date.now()}-${idx}`,
-              strMeal: parsed.title,
-              strInstructions: parsed.instructions,
-              strMealThumb: null,
-              strCategory: preferences.mealType || "AI",
-              strArea: preferences.cuisine || "AI Generated",
-              strTags: preferences.dietaryPreference,
-            };
-            parsed.ingredients.slice(0, 20).forEach((ing, i) => {
-              aiRecipe[`strIngredient${i + 1}`] = ing;
-              aiRecipe[`strMeasure${i + 1}`] = "";
-            });
-            return aiRecipe;
-          }
-          return null;
-        }).filter(Boolean);
-      } else if (aiRecipeBlocks.length === 1) {
-        // Handle single recipe block
-        const parsed = parseAIRecipe(aiRecipeBlocks[0]);
-        if (parsed.title && parsed.ingredients.length > 1 && parsed.instructions && parsed.instructions.length > 10) {
-          const aiRecipe = {
-            idMeal: `ai-${Date.now()}`,
-            strMeal: parsed.title,
-            strInstructions: parsed.instructions,
-            strMealThumb: null,
-            strCategory: preferences.mealType || "AI",
-            strArea: preferences.cuisine || "AI Generated",
-            strTags: preferences.dietaryPreference,
-          };
-          parsed.ingredients.slice(0, 20).forEach((ing, i) => {
-            aiRecipe[`strIngredient${i + 1}`] = ing;
-            aiRecipe[`strMeasure${i + 1}`] = "";
-          });
-          aiRecipeList = [aiRecipe];
-        }
+      for (const query of searchQueries) {
+        const results = await searchMealsByName(query);
+        foundRecipes.push(...results);
       }
-      if (aiRecipeList.length > 0) {
-        setAiRecipes(aiRecipeList);
-        setToastMessage("Here are some AI-generated recipes for you!");
-        setToastType("info");
-        setShowToast(true);
+
+      // Remove duplicates
+      foundRecipes = [...new Map(foundRecipes.map(r => [r.idMeal, r])).values()];
+
+      // Apply filters
+      foundRecipes = applyFilters(foundRecipes);
+
+      if (foundRecipes.length > 0) {
+        setAiRecipes(foundRecipes.slice(0, 5));
+        setToastMessage("Found some recipes matching your preferences!");
+        setToastType("success");
       } else {
-        // Fallback: treat as general text
-        setAiRecipes([]);
-        setToastMessage(aiText);
-        setToastType("info");
-        setShowToast(true);
+        // Fallback to AI generation
+        const axios = (await import("axios")).default;
+        const prompt = `Generate 3 creative recipes based on these preferences: Dietary: ${preferences.dietaryPreference}, Meal: ${preferences.mealType}, Cuisine: ${preferences.cuisine}, Cooking Time: ${preferences.cookingTime}, Skill: ${preferences.skillLevel}, Additional: ${preferences.additionalInfo}.\n\nPlease format your response strictly as follows for each recipe:\nTitle: <Recipe Title>\nDescription: <Brief appetizing description>\nIngredients:\n- <ingredient 1>\n- <ingredient 2>\n...\nInstructions:\n1. <step 1>\n2. <step 2>\n...\nSeparate each recipe with \n---\n.`;
+        
+        const response = await axios.post(
+          "https://api.x.ai/v1/chat/completions",
+          {
+            model: "grok-3-mini",
+            messages: [
+              { role: "system", content: "You are a helpful AI chef assistant. When asked for recipes, always return a list of 3 creative recipes in the strict format described by the user prompt." },
+              { role: "user", content: prompt },
+            ],
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${import.meta.env.VITE_XAI_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        const aiText = response.data.choices?.[0]?.message?.content || "Sorry, I couldn't generate a recipe.";
+        const aiRecipeBlocks = aiText.split(/\n---+\n/).map(block => block.trim()).filter(Boolean);
+        let aiRecipeList = [];
+
+        if (aiRecipeBlocks.length > 0) {
+          aiRecipeList = await Promise.all(aiRecipeBlocks.map(async (block, idx) => {
+            const parsed = parseAIRecipe(block);
+            if (parsed.title && parsed.ingredients.length > 1 && parsed.instructions && parsed.instructions.length > 10) {
+              // Generate image for the recipe
+              const imageUrl = await generateImageWithXAI(`${parsed.title}, ${preferences.cuisine || ''} cuisine`);
+              
+              const aiRecipe = {
+                idMeal: `ai-${Date.now()}-${idx}`,
+                strMeal: parsed.title,
+                strInstructions: parsed.instructions,
+                strMealThumb: imageUrl,
+                strCategory: preferences.mealType || "AI",
+                strArea: preferences.cuisine || "AI Generated",
+                strTags: preferences.dietaryPreference,
+              };
+              parsed.ingredients.slice(0, 20).forEach((ing, i) => {
+                aiRecipe[`strIngredient${i + 1}`] = ing;
+                aiRecipe[`strMeasure${i + 1}`] = "";
+              });
+              return aiRecipe;
+            }
+            return null;
+          }));
+        }
+
+        // Filter out any null results
+        aiRecipeList = aiRecipeList.filter(Boolean);
+
+        if (aiRecipeList.length > 0) {
+          setAiRecipes(aiRecipeList);
+          setToastMessage("Here are some AI-generated recipes for you!");
+          setToastType("success");
+        } else {
+          setAiRecipes([]);
+          setToastMessage("Sorry, I couldn't generate any valid recipes. Please try again.");
+          setToastType("error");
+        }
       }
-    } catch (err) {
-      setToastMessage("Sorry, we couldn't generate a recipe at this time.");
+    } catch (error) {
+      console.error("Error generating recipes:", error);
+      setToastMessage("An error occurred while generating recipes");
       setToastType("error");
-      setShowToast(true);
     } finally {
       setLoading(false);
+      setShowToast(true);
     }
   };
 
@@ -336,7 +431,7 @@ const AIRecipes = () => {
     try {
       const axios = (await import("axios")).default;
       const aiPrompt = found.length > 0
-        ? `List 3 creative recipes using the following ingredients: ${found.join(", ")}. For each recipe, use this format:\nTitle: <Recipe Title>\nImage: <generate a realistic food image using DALL·E or similar and provide the direct image URL>\nIngredients:\n- <ingredient 1>\n- <ingredient 2>\n...\nInstructions:\n1. <step 1>\n2. <step 2>\n...\nSeparate each recipe with \n---\n.`
+        ? `List 3 creative recipes using the following ingredients: ${found.join(", ")}. For each recipe, use this format:\nTitle: <Recipe Title>\nDescription: <Brief appetizing description>\nIngredients:\n- <ingredient 1>\n- <ingredient 2>\n...\nInstructions:\n1. <step 1>\n2. <step 2>\n...\nSeparate each recipe with \n---\n.`
         : chatInput;
       const response = await axios.post(
         "https://api.x.ai/v1/chat/completions",
@@ -360,32 +455,33 @@ const AIRecipes = () => {
       let aiRecipeList = [];
       if (aiRecipeBlocks.length > 0 && found.length > 0) {
         aiRecipeList = await Promise.all(aiRecipeBlocks.map(async (block, idx) => {
-          // Extract image URL
-          const imageMatch = block.match(/Image:\s*(https?:\/\/\S+)/i);
-          let imageUrl = imageMatch ? imageMatch[1].trim() : null;
-          // Remove Image line before parsing rest
-          const blockWithoutImage = block.replace(/Image:\s*https?:\/\/\S+/i, '').trim();
-          const parsed = parseAIRecipe(blockWithoutImage);
-          // If no valid image, fetch from Unsplash
-          if (!imageUrl || !/^https?:\/\//.test(imageUrl)) {
-            imageUrl = await fetchUnsplashImage(parsed.title || parsed.ingredients[0] || 'food');
+          const parsed = parseAIRecipe(block);
+          if (parsed.title && parsed.ingredients.length > 1 && parsed.instructions && parsed.instructions.length > 10) {
+            // Generate image for the recipe
+            const imageUrl = await generateImageWithXAI(parsed.title);
+            
+            const recipe = {
+              idMeal: `ai-chat-${Date.now()}-${idx}`,
+              strMeal: parsed.title,
+              strInstructions: parsed.instructions,
+              strMealThumb: imageUrl,
+              strCategory: "AI Chat",
+              strArea: "AI Generated",
+              strTags: "AI,Chat",
+            };
+            parsed.ingredients.slice(0, 20).forEach((ing, i) => {
+              recipe[`strIngredient${i + 1}`] = ing;
+              recipe[`strMeasure${i + 1}`] = "";
+            });
+            return recipe;
           }
-          const recipe = {
-            idMeal: `ai-chat-${Date.now()}-${idx}`,
-            strMeal: parsed.title,
-            strInstructions: parsed.instructions,
-            strMealThumb: imageUrl,
-            strCategory: "AI Chat",
-            strArea: "AI Generated",
-            strTags: "AI,Chat",
-          };
-          parsed.ingredients.slice(0, 20).forEach((ing, i) => {
-            recipe[`strIngredient${i + 1}`] = ing;
-            recipe[`strMeasure${i + 1}`] = "";
-          });
-          return recipe;
+          return null;
         }));
+
+        // Filter out any null results
+        aiRecipeList = aiRecipeList.filter(Boolean);
       }
+
       // If no recipes found or no ingredients, treat as general chat
       if (aiRecipeList.length === 0) {
         setChatMessages((prev) => [

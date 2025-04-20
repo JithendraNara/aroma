@@ -49,7 +49,49 @@ export const getAllIngredients = async () => {
   }
 };
 
-// Search for meals by multiple ingredients (custom function)
+// Helper function to normalize ingredient names
+const normalizeIngredient = (ingredient) => {
+  return ingredient
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+// Helper function to calculate recipe difficulty
+const calculateDifficulty = (recipe) => {
+  const ingredientCount = Object.keys(recipe)
+    .filter(key => key.startsWith('strIngredient') && recipe[key])
+    .length;
+  
+  const instructionLength = recipe.strInstructions?.split(/\d+\./).length || 0;
+  
+  if (ingredientCount > 10 || instructionLength > 8) return "Advanced";
+  if (ingredientCount > 6 || instructionLength > 5) return "Intermediate";
+  return "Beginner";
+};
+
+// Helper function to estimate cooking time
+const estimateCookingTime = (recipe) => {
+  const instructions = recipe.strInstructions?.toLowerCase() || '';
+  const ingredients = Object.keys(recipe)
+    .filter(key => key.startsWith('strIngredient') && recipe[key])
+    .length;
+
+  if (instructions.includes('overnight') || instructions.includes('hours')) {
+    return '60+ min';
+  } else if (
+    instructions.includes('simmer') || 
+    instructions.includes('bake') || 
+    ingredients > 8
+  ) {
+    return '30-60 min';
+  } else if (instructions.includes('quick') || ingredients <= 5) {
+    return '15-30 min';
+  }
+  return '30-45 min';
+};
+
+// Enhanced search by multiple ingredients
 export const searchByMultipleIngredients = async (ingredientsList) => {
   try {
     // First, get all meals for the first ingredient
@@ -75,20 +117,26 @@ export const searchByMultipleIngredients = async (ingredientsList) => {
       for (let i = 1; i <= 20; i++) {
         const ingredient = mealDetails[`strIngredient${i}`];
         if (ingredient && ingredient.trim()) {
-          mealIngredients.push(ingredient.toLowerCase());
+          mealIngredients.push(normalizeIngredient(ingredient));
         }
       }
 
-      // Check if all of our ingredients are in the meal
+      // Enhanced ingredient matching with fuzzy search
       const hasAllIngredients = ingredientsList
         .slice(1)
-        .every((ingredient) =>
-          mealIngredients.some((mealIng) =>
-            mealIng.includes(ingredient.toLowerCase())
-          )
-        );
+        .every((ingredient) => {
+          const normalizedInput = normalizeIngredient(ingredient);
+          return mealIngredients.some((mealIng) => 
+            mealIng.includes(normalizedInput) || 
+            normalizedInput.includes(mealIng) ||
+            levenshteinDistance(mealIng, normalizedInput) <= 2
+          );
+        });
 
       if (hasAllIngredients) {
+        // Add additional metadata
+        mealDetails.difficulty = calculateDifficulty(mealDetails);
+        mealDetails.estimatedTime = estimateCookingTime(mealDetails);
         filteredMeals.push(mealDetails);
       }
     }
@@ -99,3 +147,27 @@ export const searchByMultipleIngredients = async (ingredientsList) => {
     return [];
   }
 };
+
+// Levenshtein distance for fuzzy matching
+function levenshteinDistance(str1, str2) {
+  const track = Array(str2.length + 1).fill(null).map(() =>
+    Array(str1.length + 1).fill(null)
+  );
+  for (let i = 0; i <= str1.length; i += 1) {
+    track[0][i] = i;
+  }
+  for (let j = 0; j <= str2.length; j += 1) {
+    track[j][0] = j;
+  }
+  for (let j = 1; j <= str2.length; j += 1) {
+    for (let i = 1; i <= str1.length; i += 1) {
+      const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      track[j][i] = Math.min(
+        track[j][i - 1] + 1,
+        track[j - 1][i] + 1,
+        track[j - 1][i - 1] + indicator
+      );
+    }
+  }
+  return track[str2.length][str1.length];
+}
